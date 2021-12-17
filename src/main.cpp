@@ -1,7 +1,11 @@
-//#include "User_Setup.h"
-#define ESP_WROVER_KIT
-#ifndef ESP_WROVER_KIT
-#define TFT_PARALLEL_8_BIT
+//#define ESP_WROVER_KIT
+//#define PARALLEL8
+#define LILYGO_TTGO
+//#define ILI9341
+#undef PARALLEL8
+#ifdef PARALLEL8
+#define TFT_WIDTH 240
+#define TFT_HEIGHT 320
 #define TFT_BL -1
 #define TFT_CS   33  // Chip select control pin (library pulls permanently low
 #define TFT_DC   22  // (RS) Data Command control pin - must use a pin in the range 0-31
@@ -16,7 +20,9 @@
 #define TFT_D5   12
 #define TFT_D6   14
 #define TFT_D7   4
-#else
+#elif defined(ESP_WROVER_KIT)
+#define TFT_WIDTH 240
+#define TFT_HEIGHT 320
 #define TFT_MISO 25
 #define TFT_MOSI 23
 #define TFT_SCLK 19
@@ -25,6 +31,27 @@
 #define TFT_RST  18  // Reset pin, toggles on startup
 #define TFT_BL   5            // LED back-light control pin
 #define TFT_BACKLIGHT_ON LOW  // Level to turn ON back-light (HIGH or LOW)
+#elif defined(LILYGO_TTGO)
+#define TFT_WIDTH 135
+#define TFT_HEIGHT 240
+#define TFT_MISO -1
+#define TFT_MOSI 19
+#define TFT_SCLK  18
+#define TFT_CS   5
+#define TFT_DC   16
+#define TFT_RST  23
+#define TFT_BL 4
+#else
+#define TFT_WIDTH 240
+#define TFT_HEIGHT 320
+#define TFT_MISO -1
+#define TFT_MOSI 23
+#define TFT_SCLK 18
+#define TFT_CS   5  // Chip select control pin (library pulls permanently low
+#define TFT_DC   2  // (RS) Data Command control pin - must use a pin in the range 0-31
+#define TFT_RST  4  // Reset pin, toggles on startup
+#define TFT_BL   15            // LED back-light control pin
+
 #endif
 #include <Arduino.h>
 #include <SPI.h>
@@ -32,24 +59,48 @@
 //#include <TFT_eSPI.h>
 #include <gfx_cpp14.hpp>
 //#include <gfx_tft_espi.hpp>
-#include "tft_io.hpp"
+#include "tft_parallel8.hpp"
+#include "tft_spi.hpp"
+#if defined(PARALLEL8) || defined(ESP_WROVER_KIT) || defined(ILI9341)
 #include "ili9341.hpp"
+#else
+#include "st7789.hpp"
+#endif
 #include "pretty_effect.hpp"
 #include "../fonts/Bm437_ATI_9x16.h"
 #include "../fonts/Bm437_Verite_9x16.h"
 //#include "../fonts/Maziro.h"
 using namespace gfx;
 using namespace arduino;
-#ifndef ESP_WROVER_KIT
+#ifdef PARALLEL8
 using bus_type = tft_p8<TFT_CS,TFT_WR,TFT_RD,TFT_D0,TFT_D1,TFT_D2,TFT_D3,TFT_D4,TFT_D5,TFT_D6,TFT_D7>;
 #else
-using bus_type = tft_spi<HSPI,TFT_CS,TFT_MOSI,TFT_MISO,TFT_SCLK,SPI_MODE0,40*1000*1000,20*1000*1000,true,320*240*2>;
+using bus_type = tft_spi<HSPI,TFT_CS,TFT_MOSI,TFT_MISO,TFT_SCLK,SPI_MODE0,
+#ifdef LILYGO_TTGO
+40*1000*1000
+#elif defined(ESP_WROVER_KI)
+40*1000*1000
+#else
+20*1000*1000
 #endif
-//using tft_type = gfx_tft_espi<true>;
-using tft_type = ili9341<TFT_DC,TFT_RST,TFT_BL,bus_type,1>;
+,20*1000*1000,true
+#ifdef OPTIMIZE_DMA
+,TFT_WIDTH*TFT_HEIGHT*2
+#endif
+>;
+#endif
+#if defined(PARALLEL8) || defined(ESP_WROVER_KIT) || defined(ILI9341)
+using tft_type = ili9341<TFT_DC,TFT_RST,TFT_BL,bus_type,3
+#ifdef ILI9341
+,true
+#endif
+>;
+#else
+using tft_type = st7789<TFT_WIDTH,TFT_HEIGHT,TFT_DC,TFT_RST,TFT_BL,bus_type,3>;
+#endif
+
 using tft_color = color<typename tft_type::pixel_type>;
-//TFT_eSPI tft_espi = TFT_eSPI();
-//tft_type tft(tft_espi);
+
 tft_type tft;
 
 #define PARALLEL_LINES 16
@@ -171,23 +222,22 @@ void scroll_text_demo() {
     while(true) {
 
        draw::filled_rectangle(tft,text_rect,tft_color::black);
-        if(text_rect.x2>=320) {
-           draw::filled_rectangle(tft,text_rect.offset(-320,0),tft_color::black);
+        if(text_rect.x2>=tft.dimensions().width) {
+           draw::filled_rectangle(tft,text_rect.offset(-tft.dimensions().width,0),tft_color::black);
         }
 
         text_rect=text_rect.offset(2,0);
         draw::text(tft,text_rect,text,f,tft_color::old_lace,tft_color::black,false);
-        if(text_rect.x2>=320){
-            draw::text(tft,text_rect.offset(-320,0),text,f,tft_color::old_lace,tft_color::black,false);
+        if(text_rect.x2>=tft.dimensions().width){
+            draw::text(tft,text_rect.offset(-tft.dimensions().width,0),text,f,tft_color::old_lace,tft_color::black,false);
         }
-        if(text_rect.x1>=320) {
-            text_rect=text_rect.offset(-320,0);
+        if(text_rect.x1>=tft.dimensions().width) {
+            text_rect=text_rect.offset(-tft.dimensions().width,0);
             first=false;
         }
         
         if(!first && text_rect.x1>=text_start)
             break;
-        vTaskDelay(1);
     }
 }
 void lines_demo() {
@@ -304,8 +354,11 @@ static void display_pretty_colors()
                     draw::line(tft,srect16(0,tft.dimensions().height-i*(tft.dimensions().height/240.0)-1,tft.dimensions().width-1,tft.dimensions().height-i*(tft.dimensions().height/240.0)-1),tft_color::black);
                 }
             }
-            
+#ifdef LILYGO_TTGO
+            File fs = SPIFFS.open("/image_240.jpg");
+#else
             File fs = SPIFFS.open((0==pid)?"/image.jpg":(1==pid)?"/image2.jpg":"/image3.jpg");
+#endif
             draw::image(pixels,(srect16)pixels.bounds(),&fs,rect16(0,0,-1,-1));
             fs.close();
 #ifdef ASCII_JPEGS
@@ -320,8 +373,11 @@ void setup() {
     SPIFFS.begin(false);
     //tft_espi.init();
     //tft_espi.setRotation(1);
-    
-    pretty_effect_init("/image.jpg",336,256,320,240);
+#ifdef LILYGO_TTGO
+    pretty_effect_init("/image_240.jpg",256,151,320,240);
+#else
+    pretty_effect_init("/image.jpg",336,256,tft.dimensions().width,tft.dimensions().height);
+#endif
     
     display_pretty_colors();
     //tft.fill(tft.bounds(),tft_color::goldenrod);

@@ -4,13 +4,14 @@
 #include <gfx_pixel.hpp>
 #include <gfx_positioning.hpp>
 namespace arduino {
-    template<int8_t PinDC, int8_t PinRst, int8_t PinBL, typename Bus, uint8_t Rotation = 0>
+    template<int8_t PinDC, int8_t PinRst, int8_t PinBL, typename Bus, uint8_t Rotation = 0, bool BacklightHigh=false>
     struct ili9341 final {
         constexpr static const int8_t pin_dc = PinDC;
         constexpr static const int8_t pin_rst = PinRst;
         constexpr static const int8_t pin_bl = PinBL;
         constexpr static const uint8_t rotation = Rotation & 3;
         constexpr static const size_t max_dma_size = 320*240*2;
+        constexpr static const bool backlight_high = BacklightHigh;
         using type = ili9341;
         using driver = tft_driver<PinDC, PinRst, PinBL, Bus>;
         using bus = Bus;
@@ -149,7 +150,7 @@ namespace arduino {
                     bus::end_write();
                     if(pin_bl>-1) {
                         pinMode(pin_bl,OUTPUT);
-                        digitalWrite(pin_bl,LOW);
+                        digitalWrite(pin_bl,backlight_high);
                     }
                     
                     m_initialized = true;
@@ -341,19 +342,13 @@ namespace arduino {
                 // direct blt
                 if(src.bounds().width()==srcr.width() && srcr.x1==0) {
                     bus::begin_write();
-                    bus::start_transaction();
                     set_window(dstr);
                     if(async) {
-                        bus::end_transaction();
-                        bus::end_write();
-                        bus::begin_write();
-                        bus::start_transaction();
-                    
                         bus::write_raw_dma(src.begin()+(srcr.y1*src.dimensions().width*2),(srcr.y2-srcr.y1+1)*src.dimensions().width*2);
                     } else {
                         bus::write_raw(src.begin()+(srcr.y1*src.dimensions().width*2),(srcr.y2-srcr.y1+1)*src.dimensions().width*2);
                     }
-                    bus::end_transaction();
+
                     bus::end_write();
                     return gfx::gfx_result::success;
                 }
